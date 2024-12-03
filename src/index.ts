@@ -13,7 +13,7 @@ app.use(express.json());
 
 app.use(cors())
 
-// Rou
+// Route
 
 app.get('/matchPreviews', async (req: Request, res: Response) => {
     const name = req.query['name'] || 'mcnutt';
