@@ -6,7 +6,7 @@ import { getMatchData, getMatchPreviews } from './service';
 dotenv.config();
 
 const app = express();
-const PORT = 4000;
+const PORT = process.env.PORT || 4000
 
 // Middleware
 app.use(express.json());
@@ -38,5 +38,5 @@ app.get('/match', async (req: Request, res: Response) => {
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Server is running at http://localhost:${PORT}`);
+  console.log(`Server is running at port ${PORT}`);
 });
