@@ -18,6 +18,70 @@ function formatChampionName(champion: string) {
    return champion.replace(regex, '$1 $2');
 }
 
+export async function getMatchPreview(matchId: string, accountId: string) {
+
+    const url = `https://americas.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${process.env.RIOT_API_KEY}`;
+    const matchResponse = await axios.get(url);
+    const matchData = matchResponse.data;
+
+    if (matchData['info']['gameMode'] !== 'CLASSIC') {
+        return null;
+    }
+
+    const playerData = matchData['info']['participants'];
+
+    let playerChampion: string = '';
+    let enemyChampion: string = '';
+    let role = '';
+    let win = false;
+
+    let playerParticipantId = accountId;
+    let enemyParticipantId = '';
+
+    for (const player of playerData) {
+        if (player['puuid'] === accountId) {
+
+            playerChampion = player['championName'];
+            // Track role 
+            const playerRole: RoleKey = player['teamPosition'];
+
+            role = ROLES[playerRole];
+
+            for (const player of playerData) {
+            if (player['teamPosition'] === playerRole && player['puuid'] !== accountId) {
+                enemyChampion = player['championName']
+                enemyParticipantId = player['puuid'];
+            }
+            }
+
+            // Determine if win or lose
+            const playerTeamId = player['teamId'];
+
+            const winningTeamId = matchData['info']['teams'][0]['win'] ? '100' : '200';
+
+            if (playerTeamId.toString() === winningTeamId.toString()) {
+                win = true;
+            } else {
+                win = false;
+            }
+        }
+    }
+
+    playerChampion = formatChampionName(playerChampion);
+    enemyChampion = formatChampionName(enemyChampion);
+
+    return {
+        accountId,
+        matchId,
+        playerChampion,
+        enemyChampion,
+        role,
+        win,
+        playerParticipantId,
+        enemyParticipantId
+    }
+}
+
 export async function getMatchPreviews(name: any, tag: any) {
 
     const accountId = await getAccountIdFromNameAndTag(name, tag);
@@ -27,69 +91,11 @@ export async function getMatchPreviews(name: any, tag: any) {
     let matchPreviews = [];
 
     for (let i = 0; i < matchIds.length; i++) {
-
-      const matchId = matchIds[i];
-      const matchResponse = await axios.get(`https://americas.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${process.env.RIOT_API_KEY}`);
-      const matchData = matchResponse.data;
-
-      if (matchData['info']['gameMode'] !== 'CLASSIC') {
-          continue;
-      }
-
-      const playerData = matchData['info']['participants'];
-
-      let playerChampion: string = '';
-      let enemyChampion: string = '';
-      let role = '';
-      let win = false;
-
-      let playerParticipantId = accountId;
-      let enemyParticipantId = '';
-
-      for (const player of playerData) {
-        if (player['puuid'] === accountId) {
-
-          playerChampion = player['championName'];
-          // Track role 
-          const playerRole: RoleKey = player['teamPosition'];
-
-          role = ROLES[playerRole];
-
-          for (const player of playerData) {
-            if (player['teamPosition'] === playerRole && player['puuid'] !== accountId) {
-              enemyChampion = player['championName']
-              enemyParticipantId = player['puuid'];
-            }
-          }
-
-          // Determine if win or lose
-          const playerTeamId = player['teamId'];
-
-          const winningTeamId = matchData['info']['teams'][0]['win'] ? '100' : '200';
-
-          if (playerTeamId.toString() === winningTeamId.toString()) {
-              win = true;
-          } else {
-              win = false;
-          }
+        const matchPreview = await getMatchPreview(matchIds[i], accountId);
+        
+        if (matchPreview) {
+            matchPreviews.push(matchPreview);
         }
-      }
-
-      playerChampion = formatChampionName(playerChampion);
-      enemyChampion = formatChampionName(enemyChampion);
-
-      const matchPreview = {
-        accountId,
-        matchId,
-        playerChampion,
-        enemyChampion,
-        role,
-        win,
-        playerParticipantId,
-        enemyParticipantId
-      }
-
-      matchPreviews.push(matchPreview);
     }
     
     return matchPreviews;
