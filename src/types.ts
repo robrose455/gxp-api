@@ -51,3 +51,79 @@ export type MatchDto = {
     data: Data[]
 }
 
+export type TrendData = {
+    gold: {
+        averageEarlyGrowthRate: number,
+        averageEarlyGrowthRateAdvantage: number,
+        averageMidGrowthRate: number,
+        averageMidGrowthRateAdvantage: number,
+        averageLateGrowthRate: number,
+        averageLateGrowthRateAdvantage: number,
+        averageTotal: number, //
+        averageTotalAdvantage: number, //
+        averageAtTen: number, //
+        averageAtTenAdvantage: number, //
+        averageGPM: number, //
+        averageGPMAdvantage: number, //
+        averageShare: number,
+        averageShareAdvantage: number,
+        averageBaronSwing: number,
+        averageBaronSwingAdvantage: number
+    },
+    xp: {
+        averageEarlyGrowthRate: number,
+        averageEarlyGrowthRateAdvantage: number,
+        averageMidGrowthRate: number,
+        averageMidGrowthRateAdvantage: number,
+        averageLateGrowthRate: number,
+        averageLateGrowthRateAdvantage: number,
+        averageTimeToSix: number,
+        averageTimeToSixAdvantage: number,
+        averageTotal: number,
+        averageTotalAdvantage: number,
+        averageAtTen: number,
+        averageAtTenAdvantage: number,
+        averageXPM: number,
+        averageXPMAdvantage: number,
+        averageShare: number,
+        averageShareAdvantage: number,
+        averageBaronSwing: number,
+        averageBaronSwingAdvantage: number,
+        averageLevelAdvantageInLoss: number,
+        averageLevelAdvantageInWin: number
+    },
+    cs: {
+        averageEarlyGrowthRate: number,
+        averageEarlyGrowthRateAdvantage: number,
+        averageMidGrowthRate: number,
+        averageMidGrowthRateAdvantage: number,
+        averageLateGrowthRate: number,
+        averageLateGrowthRateAdvantage: number,
+        averageTimeToHundred: number,
+        averageTimeToHundredAdvantage: number,
+        averageTotal: number,
+        averageTotalAdvantage: number,
+        averageAtTen: number,
+        averageAtTenAdvantage: number,
+        averageXPM: number,
+        averageXPMAdvantage: number,
+        averageShare: number,
+        averageShareAdvantage: number,
+        averageBaronSwing: number,
+        averageBaronSwingAdvantage: number
+    },
+
+}
+
+// GOLD_PER_MINUTE
+export type StatGroup = {
+    id: string,
+    stats: Stat[]
+}
+
+export type Stat = {
+    id: string,
+    value: number
+}
+
+

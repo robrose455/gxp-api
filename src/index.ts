@@ -1,7 +1,7 @@
 import express, { NextFunction, Request, Response } from 'express';
 import dotenv from 'dotenv'
 import cors from 'cors';
-import { getMatchData, getMatchPreview, getMatchPreviews } from './service';
+import { getAccountIdFromNameAndTag, getMatchData, getMatchListFromAccountId, getMatchPreview, getMatchPreviews, getTrendData } from './service';
 
 dotenv.config();
 
@@ -96,6 +96,43 @@ app.get('/match', async (req: Request, res: Response, next: NextFunction) => {
     }
 
 });
+
+app.get('/trends', async (req: Request, res: Response, next: NextFunction) => {
+
+  console.log('Hello!');
+  try {
+    
+    const name = req.query['name']
+
+    if (!name) {
+      const err = new Error('Missing name query');
+      next(err);
+    }
+
+    const tag = req.query['tag']
+
+    if (!tag) {
+      const err = new Error('Missing tag query');
+      next(err)
+    }
+
+    const sampleSize = Number(req.query['sampleSize']);
+
+    if (!sampleSize) {
+      const err = new Error('Missing sampleSize query');
+      next(err);
+    }
+
+    const accountId = await getAccountIdFromNameAndTag(name, tag);
+
+    const trendData = await getTrendData(accountId, sampleSize);
+    
+    res.send(trendData);
+
+  } catch (error) {
+    
+  }
+})
 
 
 // Start server

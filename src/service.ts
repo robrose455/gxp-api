@@ -1,16 +1,41 @@
 import axios from 'axios';
-import { Data, MatchDto, Participant, RoleKey, ROLES, Team, Event, EventType} from './types';
+import { Data, MatchDto, Participant, RoleKey, ROLES, Team, Event, EventType, TrendData, Stat, StatGroup} from './types';
+import { 
+    getAverageTotalAdvantage, 
+    getAverageGrowthRateAdvantage, 
+    getTotalMatchesInRole, 
+    getAverageResourcePerMinuteAdvantage, 
+    getAverageResourceShare, 
+    getAverageResourceShareAdvantage, 
+    getAverageTotal,
+    getAverageGrowthRate,
+    getAverageResourcePerMinute
+} from './stat-calculator';
+import { wait } from './timeout-util';
+import { matchIdsArr } from './manual-data';
 
 export async function getAccountIdFromNameAndTag(name:any , tag: any) {
-    const response = await axios.get(`https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${name}/${tag}?api_key=${process.env.RIOT_API_KEY}`);
-    const accountId = response.data.puuid;
-    return accountId;
+
+    try {
+        const response = await axios.get(`https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${name}/${tag}?api_key=${process.env.RIOT_API_KEY}`);
+        const accountId = response.data.puuid;
+        return accountId;  
+    } catch (error) {
+        console.log(error);
+        throw error;   
+    }
 }
 
-export async function getMatchListFromAccountId(accountId: any) {
-    const response = await axios.get(`https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${accountId}/ids?api_key=${process.env.RIOT_API_KEY}`);
-    const matchIds = response.data;
-    return matchIds;
+export async function getMatchListFromAccountId(accountId: any, limit: number = 20, start = 0) {
+
+    try {
+        const response = await axios.get(`https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${accountId}/ids?api_key=${process.env.RIOT_API_KEY}&count=${limit}&start=${start}`);
+        const matchIds = response.data;
+        return matchIds; 
+    } catch (error) {
+        console.log(error);
+        throw error;   
+    }
 }
 
 function formatChampionName(champion: string) {
@@ -109,8 +134,14 @@ export async function getMatchData(id: any, playerId: any) {
         data: [],
     };
 
-    // Get Timeline Data
-    const matchTimelineResponse = await axios.get(`https://americas.api.riotgames.com/lol/match/v5/matches/${id}/timeline?api_key=${process.env.RIOT_API_KEY}`);
+    let matchTimelineResponse;
+
+    try {
+        matchTimelineResponse = await axios.get(`https://americas.api.riotgames.com/lol/match/v5/matches/${id}/timeline?api_key=${process.env.RIOT_API_KEY}`);
+    } catch (error) {
+        console.log(error);
+        throw error;
+    }
 
     const matchTimeline = matchTimelineResponse.data;
 
@@ -350,4 +381,294 @@ export async function getMatchData(id: any, playerId: any) {
     // Return Data
     return matchDataDTO;
     
+}
+
+export async function getTrendData(accountId: any, sampleSize: number) {
+
+    let processedMatchDataArr: any[] = [];
+
+    let matchCount = 0;
+
+    if (process.env.FULL_REPORT === 'true') {
+        
+        for (let i = 0; i < 10; i++) {
+
+            const matchIds = matchIdsArr[i];
+
+            for (const id of matchIds) {
+
+                matchCount++;
+                console.log(`Retrieving match ${matchCount} out of 1000`)
+        
+                const processedMatchData = await getMatchData(id, accountId);
+        
+                console.log(`Waiting ${process.env.API_BUFFER} milliseconds..`)
+                await wait(Number(process.env.API_BUFFER) || 2000);
+                console.log('Moving on..!')
+        
+                processedMatchDataArr.push(processedMatchData);
+            }
+        }
+
+    } else {
+        const matchIds = await getMatchListFromAccountId(accountId, sampleSize);
+
+        for (const id of matchIds) {
+
+            matchCount++;
+            console.log(`Retrieving match ${matchCount} out of ${sampleSize}`)
+    
+            const processedMatchData = await getMatchData(id, accountId);
+    
+            await wait(Number(process.env.BUFFER) || 3000);
+    
+            processedMatchDataArr.push(processedMatchData);
+        }
+    }
+    
+    const processedTrendData = {
+        top: await processTrendDataTest(processedMatchDataArr, accountId, 'Top'),
+        jungle: await processTrendDataTest(processedMatchDataArr, accountId, 'Jungle'),
+        mid: await processTrendDataTest(processedMatchDataArr, accountId, 'Mid'),
+        adc: await processTrendDataTest(processedMatchDataArr, accountId, 'ADC'),
+        support: await processTrendDataTest(processedMatchDataArr, accountId, 'Support'),
+    }
+
+    return processedTrendData;
+}
+
+
+
+export async function processTrendDataTest(matchDataArr: MatchDto[], accountId: string, role: string) {
+
+    const context = {
+        data: matchDataArr,
+        accountId,
+        role
+    }
+
+    const statGroups: StatGroup[] = [];
+
+    const totalMatches = getTotalMatchesInRole(context);
+
+    await processSharedStats(statGroups, context);
+    
+    return {
+        totalMatches,
+        stats: statGroups
+    };
+
+}
+
+export async function processSharedStats(statGroups: StatGroup[], context: any) {
+
+    const RESOURCES = ['gold', 'xp', 'cs'];
+
+    RESOURCES.forEach((resource) => {
+
+        const resourceTitle = resource.toUpperCase();
+
+        // TOTAL
+        const totalStatGroup: StatGroup = {
+            id: `${resourceTitle}_TOTAL`,
+            stats: [
+                {
+                    id: `${resourceTitle}_TOTAL_PLAYER`,
+                    value: getAverageTotal(context, resource, undefined, undefined, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_EARLY_PLAYER`,
+                    value: getAverageTotal(context, resource, 0, 14, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_MID_PLAYER`,
+                    value: getAverageTotal(context, resource, 14, 28, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_LATE_PLAYER`,
+                    value: getAverageTotal(context, resource, 28, undefined, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_ENEMY`,
+                    value: getAverageTotal(context, resource, undefined, undefined, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_EARLY_ENEMY`,
+                    value: getAverageTotal(context, resource, 0, 14, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_MID_ENEMY`,
+                    value: getAverageTotal(context, resource, 14, 28, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_LATE_ENEMY`,
+                    value: getAverageTotal(context, resource, 28, undefined, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_ADV`,
+                    value: getAverageTotalAdvantage(context, resource)
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_EARLY_ADV`,
+                    value: getAverageTotalAdvantage(context, resource, 0, 14)
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_MID_ADV`,
+                    value: getAverageTotalAdvantage(context, resource, 14, 28)
+                },
+                {
+                    id: `${resourceTitle}_TOTAL_LATE_ADV`,
+                    value: getAverageTotalAdvantage(context, resource, 28)
+                }
+            ]
+        }
+
+        statGroups.push(totalStatGroup);
+
+        const growthRateStatGroup: StatGroup = {
+            id: `${resourceTitle}_GROWTH_RATE`,
+            stats: [
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_PLAYER`,
+                    value: getAverageGrowthRate(context, resource, undefined, undefined, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_EARLY_PLAYER`,
+                    value: getAverageGrowthRate(context, resource, 0, 14, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_MID_PLAYER`,
+                    value: getAverageGrowthRate(context, resource, 14, 28, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_LATE_PLAYER`,
+                    value: getAverageGrowthRate(context, resource, 28, undefined, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_ENEMY`,
+                    value: getAverageGrowthRate(context, resource, undefined, undefined, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_EARLY_ENEMY`,
+                    value: getAverageGrowthRate(context, resource, 0, 14, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_MID_ENEMY`,
+                    value: getAverageGrowthRate(context, resource, 14, 28, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_LATE_ENEMY`,
+                    value: getAverageGrowthRate(context, resource, 28, undefined, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_ADV`,
+                    value: getAverageGrowthRateAdvantage(context, resource)
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_EARLY_ADV`,
+                    value: getAverageGrowthRateAdvantage(context, resource, 0, 14)
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_MID_ADV`,
+                    value: getAverageGrowthRateAdvantage(context, resource, 14, 28)
+                },
+                {
+                    id: `${resourceTitle}_GROWTH_RATE_LATE_ADV`,
+                    value: getAverageGrowthRateAdvantage(context, resource, 28)
+                }
+            ]
+        }
+
+        statGroups.push(growthRateStatGroup);
+
+        // PER MINUTE STAT GROUP
+        const perMinuteStatGroup: StatGroup = {
+            id: `${resourceTitle}_PER_MINUTE`,
+            stats: [
+                {
+                    id: `${resourceTitle}_PER_MINUTE_PLAYER`,
+                    value: getAverageResourcePerMinute(context, resource, undefined, undefined, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_EARLY_PLAYER`,
+                    value: getAverageResourcePerMinute(context, resource, 0, 14, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_MID_PLAYER`,
+                    value: getAverageResourcePerMinute(context, resource, 14, 28, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_LATE_PLAYER`,
+                    value: getAverageResourcePerMinute(context, resource, 28, undefined, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_ENEMY`,
+                    value: getAverageResourcePerMinute(context, resource, undefined, undefined, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_EARLY_ENEMY`,
+                    value: getAverageResourcePerMinute(context, resource, 0, 14, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_MID_ENEMY`,
+                    value: getAverageResourcePerMinute(context, resource, 14, 28, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_LATE_ENEMY`,
+                    value: getAverageResourcePerMinute(context, resource, 28, undefined, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_ADV`,
+                    value: getAverageResourcePerMinuteAdvantage(context, resource)
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_EARLY_ADV`,
+                    value: getAverageResourcePerMinuteAdvantage(context, resource, 0, 14)
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_MID_ADV`,
+                    value: getAverageResourcePerMinuteAdvantage(context, resource, 14, 28)
+                },
+                {
+                    id: `${resourceTitle}_PER_MINUTE_LATE_ADV`,
+                    value: getAverageResourcePerMinuteAdvantage(context, resource, 28)
+                }
+            ]
+        } 
+
+        statGroups.push(perMinuteStatGroup);
+
+        const resourceShareStatGroup = {
+            id: `${resourceTitle}_SHARE`,
+            stats: [
+                {
+                    id: `${resourceTitle}_SHARE_PLAYER`,
+                    value: getAverageResourceShare(context, resource, 'ally')
+                },
+                {
+                    id: `${resourceTitle}_SHARE_ENEMY`,
+                    value: getAverageResourceShare(context, resource, 'enemy')
+                },
+                {
+                    id: `${resourceTitle}_SHARE_ADV`,
+                    value: getAverageResourceShareAdvantage(context, resource)
+                }
+            ]
+        }
+
+        statGroups.push(resourceShareStatGroup);
+
+    })
+}
+
+export async function processGoldData(stats: Stat[], context: any) {
+    
+}
+
+export async function processXpData(stats: Stat[], context: any) {
+    
+}
+
+export async function processCsData(stats: Stat[], context: any) {
+   
 }
