@@ -111,7 +111,7 @@ export async function getMatchPreviews(name: any, tag: any) {
 
     const accountId = await getAccountIdFromNameAndTag(name, tag);
 
-    const matchIds = await getMatchListFromAccountId(accountId);
+    const matchIds = await getMatchListFromAccountId(accountId, 10);
 
     let matchPreviews = [];
 

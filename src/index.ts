@@ -53,12 +53,21 @@ app.get('/matchPreview', async (req: Request, res: Response, next: NextFunction)
       next(err);
     }
 
-    const accountId = req.query['accountId'] as string;
+    const name = req.query['name']
 
-    if (!accountId) {
-      const err = new Error('Missing accountId query');
+    if (!name) {
+      const err = new Error('Missing name query');
+      next(err);
+    }
+
+    const tag = req.query['tag']
+
+    if (!tag) {
+      const err = new Error('Missing tag query');
       next(err)
     }
+
+    const accountId = await getAccountIdFromNameAndTag(name, tag);
 
     const matchPreview = await getMatchPreview(matchId, accountId);
 
@@ -80,12 +89,21 @@ app.get('/match', async (req: Request, res: Response, next: NextFunction) => {
         next(err);
       }
 
-      const accountId = req.query['accountId'];
+      const name = req.query['name']
 
-      if (!accountId) {
-        const err = new Error('Missing accountId query');
+      if (!name) {
+        const err = new Error('Missing name query');
         next(err);
       }
+
+      const tag = req.query['tag']
+
+      if (!tag) {
+        const err = new Error('Missing tag query');
+        next(err)
+      }
+
+      const accountId = await getAccountIdFromNameAndTag(name, tag);
 
       const matchTimeline = await getMatchData(id, accountId);
 
