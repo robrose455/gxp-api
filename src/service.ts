@@ -1,5 +1,4 @@
-import axios from 'axios';
-import { Data, MatchDto, Participant, RoleKey, ROLES, Team, Event, EventType, TrendData, Stat, StatGroup} from './types';
+import { Data, MatchDto, Participant, RoleKey, ROLES, Team, Event, EventType, Stat, StatGroup, ParticipantSnapshot} from './types';
 import { 
     getAverageTotalAdvantage, 
     getAverageGrowthRateAdvantage, 
@@ -13,30 +12,7 @@ import {
 } from './stat-calculator';
 import { wait } from './timeout-util';
 import { matchIdsArr } from './manual-data';
-
-export async function getAccountIdFromNameAndTag(name:any , tag: any) {
-
-    try {
-        const response = await axios.get(`https://americas.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${name}/${tag}?api_key=${process.env.RIOT_API_KEY}`);
-        const accountId = response.data.puuid;
-        return accountId;  
-    } catch (error) {
-        console.log(error);
-        throw error;   
-    }
-}
-
-export async function getMatchListFromAccountId(accountId: any, limit: number = 20, start = 0) {
-
-    try {
-        const response = await axios.get(`https://americas.api.riotgames.com/lol/match/v5/matches/by-puuid/${accountId}/ids?api_key=${process.env.RIOT_API_KEY}&count=${limit}&start=${start}`);
-        const matchIds = response.data;
-        return matchIds; 
-    } catch (error) {
-        console.log(error);
-        throw error;   
-    }
-}
+import { getAccountIdFromRiot, getMatchFromRiot, getMatchListFromRiot, getMatchTimelineFromRiot } from './riot-service';
 
 function formatChampionName(champion: string) {
    const regex = /([a-z])([A-Z])/;
@@ -45,9 +21,7 @@ function formatChampionName(champion: string) {
 
 export async function getMatchPreview(matchId: string, accountId: string) {
 
-    const url = `https://americas.api.riotgames.com/lol/match/v5/matches/${matchId}?api_key=${process.env.RIOT_API_KEY}`;
-    const matchResponse = await axios.get(url);
-    const matchData = matchResponse.data;
+    const matchData = await getMatchFromRiot(matchId);
 
     if (matchData['info']['gameMode'] !== 'CLASSIC') {
         return null;
@@ -109,9 +83,9 @@ export async function getMatchPreview(matchId: string, accountId: string) {
 
 export async function getMatchPreviews(name: any, tag: any) {
 
-    const accountId = await getAccountIdFromNameAndTag(name, tag);
+    const accountId = await getAccountIdFromRiot(name, tag);
 
-    const matchIds = await getMatchListFromAccountId(accountId, 10);
+    const matchIds = await getMatchListFromRiot(accountId, 25);
 
     let matchPreviews = [];
 
@@ -126,28 +100,9 @@ export async function getMatchPreviews(name: any, tag: any) {
     return matchPreviews;
 }
 
-export async function getMatchData(id: any, playerId: any) {
+export async function getParticipantsFromMatch(matchId: string, playerId: string) {
 
-    const matchDataDTO: MatchDto = {
-        participants: [],
-        events: [],
-        data: [],
-    };
-
-    let matchTimelineResponse;
-
-    try {
-        matchTimelineResponse = await axios.get(`https://americas.api.riotgames.com/lol/match/v5/matches/${id}/timeline?api_key=${process.env.RIOT_API_KEY}`);
-    } catch (error) {
-        console.log(error);
-        throw error;
-    }
-
-    const matchTimeline = matchTimelineResponse.data;
-
-    const matchDataResponse = await axios.get(`https://americas.api.riotgames.com/lol/match/v5/matches/${id}?api_key=${process.env.RIOT_API_KEY}`);
-
-    const matchData = matchDataResponse.data;
+    const matchData = await getMatchFromRiot(matchId);
 
     // Register Participants
     const matchDataParticipants = matchData['info']['participants'];
@@ -155,6 +110,7 @@ export async function getMatchData(id: any, playerId: any) {
     // Find which team player belongs to
     const player = matchDataParticipants.find((p: any) => p['puuid'] === playerId);
     const playerTeam = player['teamId'];
+    const participants = [];
 
     for (const p of matchDataParticipants) {
 
@@ -165,9 +121,24 @@ export async function getMatchData(id: any, playerId: any) {
             team: (playerTeam === p['teamId']) ? Team.ALLY : Team.ENEMY
         }
 
-        matchDataDTO.participants.push(participant);
+        participants.push(participant);
 
     }
+    
+    return participants;
+}
+
+export async function getMatchData(matchId: any, playerId: any) {
+
+    const matchDataDTO: MatchDto = {
+        participants: [],
+        events: [],
+        data: [],
+    };
+
+    const matchTimeline = await getMatchTimelineFromRiot(matchId);
+
+    matchDataDTO.participants = await getParticipantsFromMatch(matchId, playerId);
 
     const data: Data[] = [
         {
@@ -175,28 +146,32 @@ export async function getMatchData(id: any, playerId: any) {
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
         {
            id: matchDataDTO.participants[1].id, 
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
         {
            id: matchDataDTO.participants[2].id, 
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
         {
            id: matchDataDTO.participants[3].id, 
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
            
         },
         {
@@ -204,42 +179,48 @@ export async function getMatchData(id: any, playerId: any) {
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
         {
            id: matchDataDTO.participants[5].id, 
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
         {
            id: matchDataDTO.participants[6].id, 
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
         {
            id: matchDataDTO.participants[7].id, 
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
         {
            id: matchDataDTO.participants[8].id, 
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
         {
            id: matchDataDTO.participants[9].id, 
            gold: [],
            xp: [],
            level: [],
-           cs: []
+           cs: [],
+           damage: []
         },
     ]
 
@@ -260,12 +241,14 @@ export async function getMatchData(id: any, playerId: any) {
             const xp = participantFrame['xp'];
             const level = participantFrame['level'];
             const cs = participantFrame['jungleMinionsKilled'] + participantFrame['minionsKilled'];
+            const damage = participantFrame['damageStats']['totalDamageDoneToChampions']
 
 
             data[i-1].gold.push(gold);
             data[i-1].xp.push(xp);
             data[i-1].level.push(level);
             data[i-1].cs.push(cs);
+            data[i-1].damage.push(damage);
             
         }
 
@@ -383,6 +366,54 @@ export async function getMatchData(id: any, playerId: any) {
     
 }
 
+function getParticipantResourceData(matchTimeline: any) {
+    
+    const participantResourceData: Data[] = []
+
+    // Retrieve Frame Data
+    const matchTimelineFrames = matchTimeline['info']['frames'];
+
+    // Parse Frame Data
+    for (const frame of matchTimelineFrames) {
+
+        // Parse Data & Gold XP For Each Player
+        const participantFrames = frame['participantFrames'];
+
+        for (let i = 1; i < 11; i++) {
+
+            if (!participantResourceData[i - 1]) {
+                participantResourceData[i - 1] = {
+                  id: matchTimeline['metadata']['participants'][i - 1],
+                  gold: [],
+                  xp: [],
+                  level: [],
+                  cs: [],
+                  damage: [],
+                };
+              }
+
+            const participantFrame = participantFrames[i.toString()];
+
+            const gold = participantFrame['totalGold'];
+            const xp = participantFrame['xp'];
+            const level = participantFrame['level'];
+            const cs = participantFrame['jungleMinionsKilled'] + participantFrame['minionsKilled'];
+            const damage = participantFrame['damageStats']['totalDamageDoneToChampions']
+
+            participantResourceData[i-1].gold.push(gold);
+            participantResourceData[i-1].xp.push(xp);
+            participantResourceData[i-1].level.push(level);
+            participantResourceData[i-1].cs.push(cs);
+            participantResourceData[i-1].damage.push(damage);
+            
+        }
+
+    }
+
+    return participantResourceData;
+
+}
+
 export async function getTrendData(accountId: any, sampleSize: number) {
 
     let processedMatchDataArr: any[] = [];
@@ -411,7 +442,7 @@ export async function getTrendData(accountId: any, sampleSize: number) {
         }
 
     } else {
-        const matchIds = await getMatchListFromAccountId(accountId, sampleSize);
+        const matchIds = await getMatchListFromRiot(accountId, sampleSize);
 
         for (const id of matchIds) {
 
@@ -671,4 +702,259 @@ export async function processXpData(stats: Stat[], context: any) {
 
 export async function processCsData(stats: Stat[], context: any) {
    
+}
+
+export async function getBreakdownForMatch(matchId: string, playerId: string) {
+
+    try {
+
+        // Get Match Timeline
+        const matchTimeline = await getMatchTimelineFromRiot(matchId);
+
+        const participantResourceData = getParticipantResourceData(matchTimeline);
+
+        // Get Match Metadata
+        const participants: Participant[] = await getParticipantsFromMatch(matchId, playerId);
+
+        const frames = matchTimeline['info']['frames'];
+
+        const matchLength = frames.length;
+
+        const snapshots = [];
+
+        for (let i = 0; i < matchLength - 1; i++) {
+
+            const snapshot = {
+                frame: i + 1,
+                participants: [] as ParticipantSnapshot[]
+            }
+
+            const events = frames[i]['events']
+
+            // Create a participant snapshot for each player
+            for (let j = 0; j < 10; j++) {
+
+                const participantSnapshot: ParticipantSnapshot = {
+                    id: participants[j].id,
+                    metadata: {
+                        champion: participants[j].champion,
+                        role: participants[j].role,
+                        team: participants[j].team,
+                    },
+                    gold: participantResourceData[j].gold[i + 1] - participantResourceData[j].gold[i],
+                    xp: participantResourceData[j].xp[i + 1] - participantResourceData[j].xp[i], 
+                    cs: participantResourceData[j].cs[i + 1] - participantResourceData[j].cs[i],
+                    damage: participantResourceData[j].damage[i + 1] - participantResourceData[j].damage[i],
+                    kills: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'kill'),
+                    deaths: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'death'),
+                    assists: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'assist'),
+                    outerTurrets: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'turret', 'OUTER_TURRET'),
+                    innerTurrets: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'turret', 'INNER_TURRET'),
+                    inhibTurrets: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'turret', 'BASE_TURRET'),
+                    nexusTurrets: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'turret', 'NEXUS_TURRET'),
+                    dragons: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'neutral', 'DRAGON'),
+                    barons: getNumberOfEventsForParticipant(events, participants, participants[j].id, 'neutral', 'BARON_NASHOR'),
+
+                }
+
+                snapshot.participants.push(participantSnapshot);
+
+            }
+
+            snapshot.participants.sort((a, b) => {
+                const aTotal = a.gold + a.xp;
+                const bTotal = b.gold + b.xp;
+                return bTotal - aTotal; // Descending order
+            }); 
+
+            snapshot.participants.forEach((participant, index) => {
+                participant['rank'] = index + 1;
+            })
+
+            snapshots.push(snapshot);
+        
+        }
+
+        const bonusStars = getBonusStarsFromSnapshots(snapshots);
+
+        return {
+            snapshots,
+            bonusStars,
+        }
+        
+    } catch (error) {
+       console.log(error);
+       return [];
+    }
+}
+
+function getBonusStarsFromSnapshots(snapshots: any[]) {
+
+
+    // Leaders
+
+    // Overall Leader
+    const overallLeader = getRanksForRange(snapshots);
+
+    // Early Leader
+    const earlyLeader = getRanksForRange(snapshots, 0, 14);
+
+    // Mid Leader
+    const midLeader = getRanksForRange(snapshots, 14, 28);
+
+    // Late Leader
+    const lateLeader = getRanksForRange(snapshots, 28);
+
+    return {
+        overallLeader,
+        earlyLeader,
+        midLeader,
+        lateLeader,
+    }
+  
+}
+
+function getRanksForRange(snapshots: any[], start?: number, end?: number) {
+
+    try {
+
+        let rankTotals: any[] = [];
+
+    let min = 0;
+    let max = snapshots.length;
+
+    if (start && start > max) {
+        return null;
+    }
+
+    if (start !== undefined) {
+        min = start;
+    }
+
+    if (end !== undefined && end < max) {
+        max = end;
+    }
+
+    for (let i = min; i < max; i++) {
+
+        const participantData = snapshots[i].participants;
+
+        participantData.forEach((participant: any) => {
+
+            const id = participant.id;
+            const champion = participant.metadata.champion;
+            const singleRank = participant.rank;
+
+            const existingRankTotal = rankTotals.find((rankTotal) => rankTotal?.id === id )
+
+            if (existingRankTotal) {
+                existingRankTotal.rank += singleRank;
+            } else {
+                let rankTotal = {
+                    id,
+                    champion,
+                    rank: singleRank
+                }
+    
+                rankTotals.push(rankTotal); 
+            }
+        })
+    }
+
+    rankTotals.sort((a, b) => a.rank - b.rank)
+    
+    return rankTotals.map((rankTotal: any) => {
+        return rankTotal.champion;
+    })
+        
+    } catch (error) {
+        console.log(error);   
+    }
+}
+
+function getNumberOfEventsForParticipant(events: any[], participants: any[], participantId: string, type: string, subtype?: string): number {
+
+    switch (type) {
+        case 'kill': 
+            const killEvents = events.filter((event) => event['type'] === 'CHAMPION_KILL' && participants[Number(event['killerId']) - 1].id === participantId); 
+            return killEvents.length;
+        case 'death':
+            const deathEvents = events.filter((event) => event['type'] === 'CHAMPION_KILL' && participants[Number(event['victimId']) - 1].id === participantId);
+            return deathEvents.length;
+        case 'assist':
+            
+            try {
+                let assistEvents = [];
+                const allKillEvents = events.filter((event) => event['type'] === 'CHAMPION_KILL');
+                allKillEvents.forEach((killEvent: any) => {
+    
+                    let isAssist = false;
+    
+                    if (killEvent['assistingParticipantIds']) {
+                        killEvent['assistingParticipantIds'].forEach((assistId: number) => {
+                            if (participants[Number(assistId) - 1].id === participantId) {
+                                isAssist = true;
+                            }
+                        })
+                    }
+    
+                    if (isAssist) {
+                        assistEvents.push(killEvent);
+                    }
+                })
+                return assistEvents.length;
+            } catch (error) {
+                console.log(error);
+            }
+        case 'turret':
+            try {
+
+                const turretEvents = events.filter((event) => event['type'] === 'BUILDING_KILL' 
+                && participants[Number(event['killerId']) - 1]?.id === participantId
+                && event['towerType'] === subtype)
+                return turretEvents?.length || 0
+            } catch (error) {
+                console.log(error);
+            }
+        case 'neutral':
+            try {
+                const participantTeam = participants.find((part) => part.id === participantId)?.team;
+                const neutralEvents = events.filter((event) => event['type'] === 'ELITE_MONSTER_KILL' 
+                && participants[Number(event['killerId'])]?.team === participantTeam
+                && event['monsterType'] === subtype)
+                return neutralEvents?.length || 0
+            } catch (error) {
+                console.log(error);
+            }
+        default:
+            return 0;
+    }
+}
+
+export async function getEventTimelineDetailsForMatch(matchId: string, accountId: string) {
+
+    let timeline = await getMatchTimelineFromRiot(matchId);
+    let rawParticipants = timeline.info.participants; 
+    const matchParticipants = await getParticipantsFromMatch(matchId, accountId)
+    const completeParticipants = [];
+
+    for (const participant of rawParticipants) {
+
+        const mp = matchParticipants.find((mp: Participant) => participant.puuid === mp.id);
+        const completeParticipant = {
+            ...participant,
+            role: mp?.role,
+            champion: mp?.champion,
+            team: mp?.team,
+        }
+
+        completeParticipants.push(completeParticipant);
+    }
+
+    console.log(completeParticipants);
+
+    timeline.info.participants = completeParticipants;
+
+    return timeline;
+
 }

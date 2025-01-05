@@ -1,7 +1,8 @@
 import express, { NextFunction, Request, Response } from 'express';
 import dotenv from 'dotenv'
 import cors from 'cors';
-import { getAccountIdFromNameAndTag, getMatchData, getMatchListFromAccountId, getMatchPreview, getMatchPreviews, getTrendData } from './service';
+import { getBreakdownForMatch, getEventTimelineDetailsForMatch, getMatchData, getMatchPreview, getMatchPreviews, getTrendData } from './service';
+import { getAccountIdFromRiot } from './riot-service';
 
 dotenv.config();
 
@@ -67,7 +68,7 @@ app.get('/matchPreview', async (req: Request, res: Response, next: NextFunction)
       next(err)
     }
 
-    const accountId = await getAccountIdFromNameAndTag(name, tag);
+    const accountId = await getAccountIdFromRiot(name, tag);
 
     const matchPreview = await getMatchPreview(matchId, accountId);
 
@@ -103,7 +104,7 @@ app.get('/match', async (req: Request, res: Response, next: NextFunction) => {
         next(err)
       }
 
-      const accountId = await getAccountIdFromNameAndTag(name, tag);
+      const accountId = await getAccountIdFromRiot(name, tag);
 
       const matchTimeline = await getMatchData(id, accountId);
 
@@ -117,7 +118,6 @@ app.get('/match', async (req: Request, res: Response, next: NextFunction) => {
 
 app.get('/trends', async (req: Request, res: Response, next: NextFunction) => {
 
-  console.log('Hello!');
   try {
     
     const name = req.query['name']
@@ -141,11 +141,83 @@ app.get('/trends', async (req: Request, res: Response, next: NextFunction) => {
       next(err);
     }
 
-    const accountId = await getAccountIdFromNameAndTag(name, tag);
+    const accountId = await getAccountIdFromRiot(name, tag);
 
     const trendData = await getTrendData(accountId, sampleSize);
     
     res.send(trendData);
+
+  } catch (error) {
+    
+  }
+})
+
+app.get('/breakdown', async (req: Request, res: Response, next: NextFunction) => {
+
+  try {
+    
+    const name = req.query['name']
+
+    if (!name) {
+      const err = new Error('Missing name query');
+      next(err);
+    }
+
+    const tag = req.query['tag']
+
+    if (!tag) {
+      const err = new Error('Missing tag query');
+      next(err)
+    }
+
+    const matchId = req.query['matchId'] as string;
+
+    if (!matchId) {
+      const err = new Error('Missing matchId query');
+      next(err);
+    }
+
+    const accountId = await getAccountIdFromRiot(name, tag);
+
+    const breakdownData = await getBreakdownForMatch(matchId, accountId);
+
+    res.send(breakdownData);
+
+  } catch (error) {
+    
+  }
+})
+
+app.get('/eventTimeline', async (req: Request, res: Response, next: NextFunction) => {
+
+  try {
+    
+    const name = req.query['name']
+
+    if (!name) {
+      const err = new Error('Missing name query');
+      next(err);
+    }
+
+    const tag = req.query['tag']
+
+    if (!tag) {
+      const err = new Error('Missing tag query');
+      next(err)
+    }
+
+    const matchId = req.query['matchId'] as string;
+
+    if (!matchId) {
+      const err = new Error('Missing matchId query');
+      next(err);
+    }
+
+    const accountId = await getAccountIdFromRiot(name, tag);
+
+    const timelineData = await getEventTimelineDetailsForMatch(matchId, accountId);
+
+    res.send(timelineData);
 
   } catch (error) {
     

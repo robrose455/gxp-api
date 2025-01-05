@@ -42,7 +42,8 @@ export type Data = {
     gold: number[],
     xp: number[],
     level: number[],
-    cs: number[]
+    cs: number[],
+    damage: number[]
 }
 
 export type MatchDto = {
@@ -126,4 +127,31 @@ export type Stat = {
     value: number
 }
 
+export type Snapshot = {
+    frame: number,
+    participants: ParticipantSnapshot[];
 
+}
+
+export type ParticipantSnapshot = {
+    id: string, // puuid
+    rank?: number,
+    metadata: {
+        role: string,
+        champion: string,
+        team: string
+    }
+    gold: number, // totalGold[i + 1] - totalGold[i]
+    xp: number, // totalXp[i + 1] - totalXp[i]
+    cs: number, // minionsKilled[i + 1] - minionsKilled[i]
+    damage: number,
+    outerTurrets: number,
+    innerTurrets: number,
+    inhibTurrets: number,
+    nexusTurrets: number,
+    dragons: number,
+    barons: number,
+    kills?: number,
+    deaths?: number,
+    assists?: number,
+}
