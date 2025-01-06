@@ -47,3 +47,4 @@ export async function getMatchTimelineFromRiot(matchId: string) {
         throw error;   
     }
 }
+

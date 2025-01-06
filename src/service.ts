@@ -85,7 +85,7 @@ export async function getMatchPreviews(name: any, tag: any) {
 
     const accountId = await getAccountIdFromRiot(name, tag);
 
-    const matchIds = await getMatchListFromRiot(accountId, 25);
+    const matchIds = await getMatchListFromRiot(accountId, 20);
 
     let matchPreviews = [];
 
